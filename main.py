@@ -6,6 +6,11 @@ from pydantic import BaseModel, Field, ValidationError
 
 from langgraph.graph import StateGraph, START, END
 
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
 SUPPORT_RESPONSE_SCHEMA = {
     "type": "object",
     "additionalProperties": False,
@@ -89,8 +94,8 @@ def bedrock_converse(prompt: str, model_id: str, region: str = "us-east-1") -> s
 # ----------------------------
 # 4) Graph nodes
 # ----------------------------
-MODEL_ID = "mistral.voxtral-mini-3b-2507"  # example IDs are shown in AWS docs for Converse. :contentReference[oaicite:5]{index=5}
-AWS_REGION = "us-east-1"
+# MODEL_ID = "mistral.voxtral-mini-3b-2507"  # example IDs are shown in AWS docs for Converse. :contentReference[oaicite:5]{index=5}
+# AWS_REGION = "us-east-1"
 
 
 def draft_node(state: GraphState) -> GraphState:
@@ -114,7 +119,7 @@ def draft_node(state: GraphState) -> GraphState:
     """.strip()
 
     try:
-        out = bedrock_converse(prompt, model_id=MODEL_ID, region=AWS_REGION)
+        out = bedrock_converse(prompt, model_id=os.getenv("MODEL_ID"), region=os.getenv("AWS_REGION"))
         return {
             **state,
             "model_output_text": out,
@@ -170,7 +175,7 @@ def repair_node(state: GraphState) -> GraphState:
     Now return the corrected JSON object ONLY:
     """.strip()
 
-    out = bedrock_converse(prompt, model_id=MODEL_ID, region=AWS_REGION)
+    out = bedrock_converse(prompt, model_id=os.getenv("MODEL_ID"), region=os.getenv("AWS_REGION"))
     return {**state, "model_output_text": out, "attempts": state["attempts"] + 1}
 
 
