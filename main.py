@@ -3,6 +3,8 @@ from typing import TypedDict, Optional, Literal, Dict, Any
 import json
 import boto3
 from pydantic import BaseModel, Field, ValidationError
+import re
+from pathlib import Path
 
 from langgraph.graph import StateGraph, START, END
 
@@ -47,6 +49,7 @@ class GraphState(TypedDict):
     parsed: Optional[Dict[str, Any]]
     error: Optional[str]
     attempts: int
+    allowed_citation_ids: list[str]
 
     last_error: Optional[str]
     last_model_output_text: Optional[str]
@@ -89,13 +92,55 @@ def bedrock_converse(prompt: str, model_id: str, region: str = "us-east-1") -> s
     # Fallback if model returns text (should be rare with structured outputs)
     return "\n".join(b.get("text", "") for b in blocks if "text" in b).strip()
 
+# ----------------------------
+# HELPER FUNCTIONS (the fetching part)
+# ----------------------------
+POLICIES_CACHE = None
+
+def load_policies(path: str = "data/policies.jsonl"):
+    global POLICIES_CACHE
+    if POLICIES_CACHE is not None:
+        return POLICIES_CACHE
+
+    policies = []
+    p = Path(path)
+    if not p.exists():
+        raise FileNotFoundError(f"Missing {path}. Create it first.")
+
+    for line in p.read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            policies.append(json.loads(line))
+    POLICIES_CACHE = policies
+    return policies
+
+def tokenize(text: str) -> set[str]:
+    return set(re.findall(r"[a-z0-9-]+", text.lower()))
+
+def fetch_context(user_query: str, k: int = 4) -> tuple[str, list[str]]:
+    policies = load_policies()
+    q = tokenize(user_query)
+
+    scored = []
+    for pol in policies:
+        t = tokenize(pol["text"])
+        overlap = len(q & t)
+        scored.append((overlap, pol["id"], pol["text"]))
+
+    scored.sort(reverse=True, key=lambda x: x[0])
+    top = [x for x in scored[:k] if x[0] > 0]
+
+    # Format context so the model can cite IDs.
+    context = "\n\n".join([f"[{pid}] {txt}" for _, pid, txt in top])
+    allowed_ids = [pid for _, pid, _ in top]
+    return context, allowed_ids
 
 
 # ----------------------------
 # 4) Graph nodes
 # ----------------------------
-# MODEL_ID = "mistral.voxtral-mini-3b-2507"  # example IDs are shown in AWS docs for Converse. :contentReference[oaicite:5]{index=5}
-# AWS_REGION = "us-east-1"
+def retrieve_node(state:GraphState) -> GraphState:
+    context, allowed_ids = fetch_context(state["user_query"], k = 4)
+    return {**state, "context": context, "allowed_citation_ids": allowed_ids}
 
 
 def draft_node(state: GraphState) -> GraphState:
@@ -114,8 +159,17 @@ def draft_node(state: GraphState) -> GraphState:
 
     If context is insufficient, set next_action="ask_clarifying" and confidence <= 0.5.
 
+    ROUTING RULES (must follow):
+    1) next_action = "escalate" if the user mentions account hacked/compromised, fraud, chargeback threats, legal/privacy requests, or security concerns.
+    2) next_action = "ask_clarifying" if the user is asking about refunds/charges/shipping/orders BUT has not provided at least one identifier
+    (order ID OR invoice ID OR timestamp OR amount OR email).
+    3) next_action = "reply" only when the question can be answered safely with the given CONTEXT (and include citations).
+
     USER_QUERY: {state["user_query"]}
     CONTEXT: {state["context"]}
+
+    ALLOWED_CITATION_IDS: {state["allowed_citation_ids"]}
+    RULE: citations MUST be a list of IDs chosen only from ALLOWED_CITATION_IDS. If none apply, return [].
     """.strip()
 
     try:
@@ -132,7 +186,6 @@ def draft_node(state: GraphState) -> GraphState:
             "error": f"bedrock_call_failed: {e}",
             "attempts": state["attempts"] + 1,
         }
-
 
 def validate_node(state: GraphState) -> GraphState:
     if not state.get("model_output_text"):
@@ -151,6 +204,29 @@ def validate_node(state: GraphState) -> GraphState:
     # Validate against schema (format correctness)
     try:
         validated = SupportResponse(**obj)
+        allowed = set(state.get("allowed_citation_ids") or [])
+        cits = set(validated.citations)
+
+        # If model cited something not in allowed IDs -> fail
+        if not cits.issubset(allowed):
+            return {
+                **state,
+                "parsed": None,
+                "error": "citation_validation_failed: contains_invalid_citation_ids",
+                "last_error": "citation_validation_failed: contains_invalid_citation_ids",
+                "last_model_output_text": state.get("model_output_text"),
+            }
+
+        # Optional: if it replies confidently, require at least 1 citation
+        if validated.next_action == "reply" and validated.confidence >= 0.7 and len(validated.citations) == 0:
+            return {
+                **state,
+                "parsed": None,
+                "error": "citation_validation_failed: high_confidence_reply_requires_citation",
+                "last_error": "citation_validation_failed: high_confidence_reply_requires_citation",
+                "last_model_output_text": state.get("model_output_text"),
+            }
+
         return {**state, "parsed": validated.model_dump(), "error": None}
     except ValidationError as ve:
         return {
@@ -209,8 +285,10 @@ g.add_node("draft", draft_node)
 g.add_node("validate", validate_node)
 g.add_node("repair", repair_node)
 g.add_node("fallback", fallback_node)
+g.add_node("retrieve", retrieve_node)
 
-g.add_edge(START, "draft")
+g.add_edge(START, "retrieve")
+g.add_edge("retrieve", "draft")
 g.add_edge("draft", "validate")
 
 g.add_conditional_edges(
@@ -230,7 +308,8 @@ app = g.compile()
 if __name__ == "__main__":
     init: GraphState = {
         "user_query": "I was charged twice. What should I do?",
-        "context": "Refund policy: refunds are issued within 5-7 business days after confirmation.",
+        "context": "",
+        "allowed_citation_ids": [],
         "model_output_text": None,
         "parsed": None,
         "error": None,

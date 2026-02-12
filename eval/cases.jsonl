@@ -1,0 +1,5 @@
+{"user_query":"I was charged twice for the same order.","expected_next_action":"reply"}
+{"user_query":"Do you store my card number?","expected_next_action":"reply"}
+{"user_query":"Someone hacked my account.","expected_next_action":"escalate"}
+{"user_query":"Refund me.","expected_next_action":"ask_clarifying"}
+{"user_query":"Where is my order?","expected_next_action":"ask_clarifying"}

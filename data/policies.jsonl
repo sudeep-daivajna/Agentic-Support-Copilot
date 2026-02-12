@@ -1,0 +1,15 @@
+{"id":"refund_duplicate_charge_v1","text":"Duplicate charge refunds: If you were charged twice for the same order, contact support with the order ID and charge timestamps. Refunds are issued within 5–7 business days after confirmation."}
+{"id":"refund_processing_time_v1","text":"Refund processing time: After refund confirmation, refunds are issued within 5–7 business days depending on the payment method."}
+{"id":"billing_receipt_invoice_v1","text":"Receipts & invoices: We can provide receipts and invoices for completed orders. Share your order ID and the email used at checkout."}
+{"id":"payment_storage_v1","text":"Payment storage: We do not store full card numbers. Payments are processed via a PCI-compliant provider. We may store card brand and last 4 digits for receipts."}
+{"id":"chargeback_policy_v1","text":"Chargebacks: Please contact support before initiating a chargeback. Chargebacks may pause account access while we investigate."}
+{"id":"subscription_cancellation_v1","text":"Subscription cancellation: You can cancel anytime. If you were charged after cancellation, share cancellation timestamp and invoice ID for review."}
+{"id":"shipping_tracking_v1","text":"Shipping tracking: If your order shipped, we provide a tracking link. Share your order ID and delivery postcode."}
+{"id":"shipping_delay_v1","text":"Shipping delays: Delays can happen due to carrier issues. If your delivery is delayed beyond the estimated window, share your order ID to investigate."}
+{"id":"return_policy_v1","text":"Returns: Eligible items can be returned within 14 days of delivery if unused and in original packaging. Provide order ID and reason."}
+{"id":"privacy_data_deletion_v1","text":"Data deletion: You can request account/data deletion. We verify identity before processing. Some records may be retained for legal/compliance reasons."}
+{"id":"privacy_access_request_v1","text":"Data access request: You can request a copy of your personal data. We verify identity and respond within the stated SLA."}
+{"id":"sla_response_times_v1","text":"Support SLA: Standard issues within 24 hours. Payment/billing issues within 2 hours. Security/privacy requests are prioritized."}
+{"id":"account_security_compromised_v1","text":"Account security: If you suspect account compromise, reset password immediately, enable MFA if available, and contact support for account review."}
+{"id":"escalation_rules_v1","text":"Escalate immediately for suspected fraud, account takeover, legal/privacy requests, or repeated payment failures after basic troubleshooting."}
+{"id":"order_required_fields_v1","text":"To help quickly, include: order ID, email used at checkout, timestamps, amount charged, and screenshots of the transaction if possible."}
